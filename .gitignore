@@ -1,0 +1,47 @@
+.DS_Store
+all_maintenance_tasks.csv
+bigquery.ipynb
+bigquery.sql
+cleaning_tasks.csv
+coolsys_0.ipynb
+coolsys_1.ipynb
+coolsys_2.ipynb
+coolsys_3.ipynb
+coolsys_4.ipynb
+coolsys_5.ipynb
+coolsys_6.ipynb
+coolsys_7.ipynb
+coolsys_8.ipynb
+coolsys_9.ipynb
+coolsys_engine_0.ipynb
+coolsys.sql
+.ipynb_checkpoints/
+__pycache__/
+coolsys_env/
+data/
+cs_eng.ipynb.backup
+cs_eng_1.ipynb
+cs_eng.ipynb
+cs_engine_2.ipynb
+database_connection.ipynb
+feature-extraction-with-hugging-face-transformers.ipynb
+inspection_tasks.csv
+maintenance_analysis_report.pdf
+maintenance_tasks.csv
+nlp_engine.py
+other_tasks.csv
+output_1.txt
+output.pdf
+pdf_manual_insert.py
+requirements.txt
+run_analysis.py
+save_analysis_to_pdf.py
+save_plot.py
+test_db.py
+test_nlp_engine.py
+docs/10.04.2024_Whiteboard Session and r4 Approach for CoolSys.pdf
+docs/CoolSys Nov 13, 2024.pptx
+docs/CoolSys November 13, 2024.pptx
+docs/coolsys_5.ipynb.docx
+docs/Email.docx
+docs/Email.pptx
