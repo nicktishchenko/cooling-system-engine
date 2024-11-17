@@ -39,9 +39,6 @@ save_analysis_to_pdf.py
 save_plot.py
 test_db.py
 test_nlp_engine.py
-docs/10.04.2024_Whiteboard Session and r4 Approach for CoolSys.pdf
-docs/CoolSys Nov 13, 2024.pptx
-docs/CoolSys November 13, 2024.pptx
-docs/coolsys_5.ipynb.docx
-docs/Email.docx
-docs/Email.pptx
+docs/
+src/
+tests/
