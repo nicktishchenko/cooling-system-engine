@@ -179,87 +179,356 @@ def analyze_root_cause(verb, obj, text):
     """Analyze the root cause of an issue based on the maintenance action and context."""
     # Define detailed component categories and their related terms
     components = {
-        'ice_making': {
-            'ice maker', 'ice machine', 'ice production', 'ice cube',
-            'evaporator', 'freeze plate', 'harvest', 'bin', 'ice thickness'
+        # Ice Making System
+        'freeze_plate_system': {
+            'evaporator plate', 'freeze plate', 'cooling surface', 'grid plate', 
+            'ice mold', 'cube form', 'ice formation', 'freezing surface',
+            'water distribution plate', 'cell size', 'bridge thickness'
         },
-        'refrigeration': {
-            'refrigerant', 'compressor', 'condenser', 'evaporator',
-            'expansion valve', 'cooling', 'freeze', 'temperature'
+        'ice_formation_control': {
+            'thickness sensor', 'ice thickness', 'bridge control',
+            'water level sensor', 'formation time', 'freeze cycle',
+            'water curtain', 'spray time', 'freeze timer'
         },
-        'water_system': {
-            'water', 'pump', 'filter', 'flow', 'pressure', 'valve',
-            'inlet', 'outlet', 'drain', 'reservoir', 'distribution'
+        'harvest_system': {
+            'harvest valve', 'hot gas valve', 'defrost valve', 
+            'harvest timer', 'harvest assist', 'release mechanism',
+            'hot gas bypass', 'harvest pressure', 'harvest solenoid',
+            'harvest check valve', 'harvest complete switch'
         },
-        'electrical': {
-            'power', 'circuit', 'voltage', 'current', 'electrical',
-            'switch', 'sensor', 'control board', 'pcb', 'thermostat'
+        'ice_handling': {
+            'ice bin', 'storage bin', 'bin thermostat', 'bin control',
+            'ice chute', 'dispenser', 'agitator', 'auger motor',
+            'ice gate', 'bin door', 'bin level sensor', 'ice shield'
         },
-        'mechanical': {
-            'motor', 'fan', 'belt', 'bearing', 'gear', 'pulley',
-            'shaft', 'blade', 'auger', 'agitator'
+        'water_distribution_ice': {
+            'water pump', 'spray bar', 'spray nozzles', 'water curtain',
+            'water trough', 'water sump', 'distribution tube',
+            'water level', 'float valve', 'reservoir'
+        },
+        
+        # Refrigeration System
+        'compressor_system': {
+            'compressor', 'piston', 'scroll', 'reed valve', 'valve plate',
+            'discharge line', 'suction line', 'oil level', 'crankcase',
+            'compressor motor', 'windings', 'terminal', 'overload protector'
+        },
+        'condenser_system': {
+            'condenser coil', 'fan motor', 'fan blade', 'air flow',
+            'head pressure', 'subcooling', 'fins', 'coil surface',
+            'condenser pressure', 'air cooled', 'water cooled'
+        },
+        'refrigerant_circuit': {
+            'refrigerant', 'freon', 'charge', 'leak', 'pressure',
+            'filter drier', 'sight glass', 'accumulator', 'receiver',
+            'liquid line', 'suction line', 'discharge line'
+        },
+        'expansion_system': {
+            'TXV', 'expansion valve', 'capillary tube', 'orifice',
+            'superheat', 'bulb', 'equalizer', 'distributor',
+            'metering device', 'restrictor'
+        },
+        
+        # Water System
+        'water_supply': {
+            'water line', 'inlet valve', 'water pressure', 'filter',
+            'strainer', 'softener', 'water quality', 'supply pipe',
+            'shut off valve', 'pressure regulator'
+        },
+        'water_pump_system': {
+            'circulation pump', 'impeller', 'seal', 'pump motor',
+            'pump capacity', 'pump housing', 'bearing', 'shaft',
+            'pump pressure', 'pump strainer'
+        },
+        'water_distribution': {
+            'spray nozzles', 'water curtain', 'distributor', 'tube',
+            'spray pattern', 'distribution manifold', 'spray bar',
+            'water flow', 'distribution uniformity'
+        },
+        'drain_system': {
+            'drain line', 'condensate', 'drain pan', 'float switch',
+            'pump out', 'drain valve', 'trap', 'vent', 'slope',
+            'drain heater', 'overflow protection'
+        },
+        
+        # Electrical System
+        'control_board': {
+            'PCB', 'control board', 'controller', 'motherboard',
+            'processor', 'relay board', 'display board', 'interface',
+            'memory', 'firmware', 'programming'
+        },
+        'sensors_system': {
+            'thermistor', 'probe', 'sensor', 'thermostat', 'float switch',
+            'bin level sensor', 'pressure sensor', 'temperature sensor',
+            'water level sensor', 'ice thickness sensor'
+        },
+        'electrical_components': {
+            'contactor', 'relay', 'capacitor', 'transformer', 'fuse',
+            'overload', 'terminal block', 'wire connector', 'breaker',
+            'power supply', 'voltage regulator'
+        },
+        'wiring_system': {
+            'wire harness', 'connection', 'terminal', 'plug', 'socket',
+            'ground wire', 'power cable', 'communication wire',
+            'insulation', 'conduit', 'junction box'
         }
     }
     
-    # Define problem categories and their indicators
-    problems = {
-        'failure': {
-            'fail', 'broken', 'not working', 'malfunction', 'error',
-            'fault', 'dead', 'stopped', 'inoperative'
+    # Define parts and consumables categories
+    parts_consumables = {
+        'refrigeration_parts': {
+            'compressor': {'scroll compressor', 'reciprocating compressor', 'compressor body', 'compressor motor', 'crankshaft', 'piston', 'valve plate'},
+            'condenser': {'condenser coil', 'condenser fan', 'condenser motor', 'heat exchanger', 'fins', 'condenser tube'},
+            'evaporator': {'evaporator coil', 'evaporator fan', 'evaporator motor', 'defrost heater', 'distribution tubes'},
+            'valves': {'expansion valve', 'TXV', 'solenoid valve', 'check valve', 'service valve', 'hot gas valve'},
+            'filters': {'filter drier', 'suction filter', 'strainer', 'accumulator'}
         },
-        'noise': {
-            'noise', 'loud', 'vibration', 'rattle', 'buzz', 'hum',
-            'squeal', 'grinding', 'knocking'
+        'ice_making_parts': {
+            'freeze_plate': {'evaporator plate', 'grid plate', 'water distribution plate', 'spray bar', 'spray nozzles'},
+            'harvesting': {'hot gas valve', 'harvest assist', 'deflector', 'ice sweep', 'harvest probe'},
+            'storage': {'bin liner', 'bin door', 'gasket', 'ice gate', 'agitator', 'auger'}
         },
-        'leakage': {
-            'leak', 'drip', 'overflow', 'spill', 'seep', 'discharge',
-            'escape', 'loss'
+        'water_system_parts': {
+            'pumps': {'circulation pump', 'drain pump', 'water pump', 'pump motor', 'impeller', 'shaft seal'},
+            'filtration': {'water filter', 'sediment filter', 'carbon filter', 'scale filter', 'filter housing'},
+            'plumbing': {'water inlet valve', 'float valve', 'drain valve', 'water line', 'fitting', 'o-ring'}
         },
-        'quality': {
-            'dirty', 'contaminated', 'scale', 'buildup', 'quality',
-            'taste', 'odor', 'color', 'appearance'
+        'electrical_parts': {
+            'controls': {'control board', 'display board', 'sensor', 'thermostat', 'switch', 'timer'},
+            'power': {'contactor', 'relay', 'transformer', 'capacitor', 'overload', 'fuse'},
+            'wiring': {'wire harness', 'power cord', 'terminal', 'connector', 'ground wire'}
+        },
+        'consumables': {
+            'refrigerant': {'R404A', 'R134a', 'R290', 'R448A', 'R449A', 'R452A'},
+            'lubricants': {'compressor oil', 'mineral oil', 'POE oil', 'grease', 'lubricant'},
+            'cleaning': {'sanitizer', 'descaler', 'cleaner', 'degreaser', 'scale remover'},
+            'water_treatment': {'water softener', 'scale inhibitor', 'antimicrobial', 'pH balancer'}
         }
     }
     
-    # Define maintenance types
+    def find_parts_consumables(text):
+        """Find parts and consumables mentioned in the text."""
+        text_lower = text.lower()
+        found_items = defaultdict(list)
+        
+        for category, subcategories in parts_consumables.items():
+            for subcategory, items in subcategories.items():
+                for item in items:
+                    if item.lower() in text_lower:
+                        found_items[category].append(f"{subcategory}:{item}")
+        
+        return dict(found_items)
+    
+    # Define maintenance types with more detailed categories
     maintenance_types = {
         'preventive': {
-            'inspect', 'check', 'clean', 'adjust', 'calibrate',
-            'maintain', 'service', 'test'
+            'inspect', 'clean', 'adjust', 'lubricate', 'tighten',
+            'calibrate', 'test', 'check', 'measure', 'scheduled',
+            'routine', 'preventative', 'monitor', 'analyze', 'trend',
+            'forecast', 'predict', 'assess', 'evaluate', 'diagnose',
+            'investigate', 'study'
         },
         'corrective': {
             'repair', 'replace', 'fix', 'rebuild', 'overhaul',
-            'restore', 'modify'
+            'restore', 'rectify', 'correct', 'resolve', 'service'
         },
         'emergency': {
-            'emergency', 'urgent', 'immediate', 'critical', 'severe',
-            'dangerous', 'safety'
+            'breakdown', 'failure', 'emergency', 'urgent', 'critical',
+            'immediate', 'unplanned', 'unexpected', 'sudden', 'acute'
         }
     }
     
-    def find_matches(text, categories):
-        """Find matching categories based on text content."""
-        text = text.lower()
+    def determine_maintenance_type(text):
+        """Determine the maintenance type based on text analysis."""
+        text_lower = text.lower()
+        words = set(text_lower.split())
+        
+        # First check for emergency as it's highest priority
+        if any(indicator in text_lower for indicator in maintenance_types['emergency']):
+            return 'emergency'
+        
+        # Check for maintenance types using word combinations
+        found_types = []
+        for mtype, indicators in maintenance_types.items():
+            # Check for exact phrases first
+            if any(indicator in text_lower for indicator in indicators if ' ' in indicator):
+                found_types.append(mtype)
+                continue
+                
+            # Then check for individual words
+            if any(indicator in words for indicator in indicators if ' ' not in indicator):
+                found_types.append(mtype)
+        
+        if found_types:
+            # If multiple types found, prioritize based on specificity
+            priority_order = ['emergency', 'corrective', 'preventive']
+            for priority_type in priority_order:
+                if priority_type in found_types:
+                    return priority_type
+            
+            return found_types[0]
+        
+        # Additional context-based classification
+        if any(problem in text_lower for problems in problem_indicators.values() for problem in problems):
+            return 'corrective'
+        
+        if any(word in words for word in ['schedule', 'periodic', 'routine', 'regular', 'maintenance']):
+            return 'preventive'
+            
+        if any(word in words for word in ['check', 'inspect', 'test', 'monitor']):
+            return 'preventive'
+            
+        if any(word in words for word in ['new', 'install', 'replace', 'upgrade']):
+            return 'corrective'
+            
+        if any(word in words for word in ['adjust', 'modify', 'change', 'improve']):
+            return 'corrective'
+        
+        # Check for action verbs that indicate maintenance
+        action_verbs = {'clean', 'adjust', 'lubricate', 'tighten', 'calibrate', 'service'}
+        if any(verb in words for verb in action_verbs):
+            return 'preventive'
+        
+        return 'other'
+
+    # Define specific problem types with detailed indicators
+    problem_indicators = {
+        'mechanical_failure': {
+            'seized', 'stuck', 'broken', 'cracked', 'worn', 'misaligned',
+            'loose', 'bent', 'damaged', 'jammed', 'binding', 'stripped'
+        },
+        'electrical_failure': {
+            'short', 'open circuit', 'voltage', 'tripped', 'burnt',
+            'no power', 'grounded', 'overload', 'electrical noise',
+            'intermittent power', 'voltage drop'
+        },
+        'ice_quality_issue': {
+            'cloudy ice', 'small cubes', 'incomplete cubes', 'malformed',
+            'hollow cubes', 'white spots', 'bridging', 'long harvest',
+            'slow production', 'uneven size'
+        },
+        'performance_issue': {
+            'slow', 'inefficient', 'reduced', 'low production',
+            'poor quality', 'inconsistent', 'erratic', 'unstable',
+            'degraded', 'below spec'
+        },
+        'leakage_issue': {
+            'leak', 'drip', 'overflow', 'flood', 'seal failure',
+            'gasket leak', 'water loss', 'refrigerant leak',
+            'oil leak', 'seepage'
+        },
+        'contamination': {
+            'dirty', 'scale', 'calcium', 'mineral', 'debris', 'buildup',
+            'corrosion', 'rust', 'slime', 'mold', 'algae', 'sediment'
+        },
+        'noise_vibration': {
+            'noise', 'vibration', 'rattle', 'squeal', 'bang', 'hum',
+            'grinding', 'knocking', 'whistling', 'clicking', 'rumbling'
+        },
+        'control_system': {
+            'error code', 'not responding', 'incorrect', 'erratic',
+            'intermittent', 'display error', 'sensor error', 'communication error',
+            'program error', 'calibration error'
+        },
+        'temperature_issue': {
+            'hot', 'cold', 'warm', 'freezing', 'not cooling',
+            'high temp', 'low temp', 'inconsistent temp',
+            'temperature swing', 'poor temperature control'
+        },
+        'pressure_issue': {
+            'high pressure', 'low pressure', 'no pressure', 'pressure drop',
+            'pressure fluctuation', 'excessive pressure', 'insufficient pressure',
+            'pressure lockout', 'pressure control'
+        }
+    }
+    
+    # Define maintenance types with detailed activities
+    maintenance_types = {
+        'preventive': {
+            'inspect', 'clean', 'adjust', 'lubricate', 'tighten',
+            'calibrate', 'test', 'check', 'measure', 'scheduled',
+            'routine', 'preventative', 'monitor', 'analyze', 'trend',
+            'forecast', 'predict', 'assess', 'evaluate', 'diagnose',
+            'investigate', 'study'
+        },
+        'corrective': {
+            'repair', 'replace', 'fix', 'corrective', 'breakdown', 'failure', 'malfunction',
+            'not working', 'broken', 'damaged', 'failed', 'fault', 'issue', 'problem',
+            'restoration', 'overhaul', 'rebuild', 'inoperative', 'defective', 'error',
+            'incorrect', 'improper', 'poor', 'abnormal', 'unusual', 'excessive'
+        },
+        'emergency': {
+            'emergency', 'urgent', 'immediate', 'critical', 'breakdown', 'failure', 'asap',
+            'safety', 'hazard', 'dangerous', 'severe', 'crucial', 'priority', 'serious',
+            'major', 'significant', 'important', 'vital', 'essential'
+        },
+        'installation': {
+            'install', 'installation', 'setup', 'commissioning', 'startup', 'start-up',
+            'new equipment', 'replacement', 'upgrade', 'modification', 'configure',
+            'configuration', 'initialize', 'deploy', 'implement'
+        },
+        'diagnostic': {
+            'diagnostic', 'troubleshoot', 'investigate', 'inspection', 'check', 'test',
+            'evaluation', 'analysis', 'assessment', 'examination', 'monitor', 'measure',
+            'verify', 'validate', 'review', 'audit', 'survey'
+        },
+        'modification': {
+            'modify', 'upgrade', 'enhance', 'improve', 'optimization', 'retrofit',
+            'reconfiguration', 'adjustment', 'alteration', 'change', 'update', 'revise',
+            'redesign', 'adapt', 'customize', 'tune'
+        }
+    }
+    
+    def find_matches(text, term_dict):
+        """Find matches in text for terms in term_dict."""
+        text_lower = text.lower()
         matches = []
-        for category, terms in categories.items():
-            if any(term in text for term in terms):
+        for category, terms in term_dict.items():
+            if any(term.lower() in text_lower for term in terms):
                 matches.append(category)
         return matches
     
-    # Combine all text for analysis
-    full_text = f"{verb} {obj} {text}".lower()
+    # Combine all text fields for analysis
+    full_text = f"{text} {obj} {verb}".lower()
     
-    # Find matches in each category
-    component_matches = find_matches(full_text, components)
-    problem_matches = find_matches(full_text, problems)
-    maint_matches = find_matches(full_text, maintenance_types)
+    # Find all matches
+    found_components = find_matches(full_text, components)
+    found_problems = find_matches(full_text, problem_indicators)
+    found_parts = find_parts_consumables(full_text)
     
-    # Return analysis results
-    return {
-        'components': component_matches,
-        'problems': problem_matches,
-        'maintenance_type': maint_matches[0] if maint_matches else 'other'
+    # Determine maintenance type
+    maintenance_type = determine_maintenance_type(full_text)
+    
+    # Determine severity based on various factors
+    severity_indicators = {
+        'high': {'emergency', 'critical', 'urgent', 'failure', 'breakdown', 'safety',
+                'immediate', 'severe', 'major', 'serious'},
+        'medium': {'degraded', 'warning', 'attention', 'minor failure', 'reduced',
+                  'inconsistent', 'poor', 'issue'},
+        'low': {'routine', 'normal', 'scheduled', 'preventive', 'adjust', 'check',
+                'inspect', 'clean', 'monitor'}
     }
+    
+    # Determine severity
+    severity = 'normal'
+    for level, indicators in severity_indicators.items():
+        if any(indicator in full_text for indicator in indicators):
+            severity = level
+            break
+    
+    return {
+        'components': found_components,
+        'problem_types': found_problems,
+        'maintenance_type': maintenance_type,
+        'severity': severity,
+        'parts_consumables': found_parts,
+        'timestamp': pd.Timestamp.now()  # Add timestamp for tracking
+    }
+
+def add_percentage(df, count_column='Count'):
+    total = df[count_column].sum()
+    df['Percentage'] = (df[count_column] / total * 100).round(2)
+    return df
 
 def main():
     """Main execution function."""
@@ -279,64 +548,37 @@ def main():
         start_time = time.time()
         
         # Initialize counters and storage
-        component_stats = {
-            'components': Counter(),
-            'problems': Counter(),
-            'maintenance_types': Counter(),
-            'tasks': defaultdict(int)
-        }
+        component_stats = defaultdict(Counter)
         
         # Process each maintenance record
         for idx, row in tqdm(df.iterrows(), total=len(df), desc="Processing records"):
-            for field in df.columns:
-                text = str(row[field])
-                if pd.notna(text) and text.strip():
-                    analysis = analyze_root_cause('', '', text)
-                    
-                    # Update statistics
-                    component_stats['components'].update(analysis['components'])
-                    component_stats['problems'].update(analysis['problems'])
-                    component_stats['maintenance_types'].update([analysis['maintenance_type']])
-                    
-                    # Create task description
-                    task = f"{text[:100]}..." if len(text) > 100 else text
-                    component_stats['tasks'][task] += 1
+            text = row['Description']
+            if pd.notna(text) and text.strip():
+                analysis = analyze_root_cause('', '', text)
+                
+                # Update statistics
+                component_stats['maintenance_types'].update([analysis['maintenance_type']])
         
-        # Create summary DataFrames
-        maintenance_df = pd.DataFrame({
-            'Component': list(component_stats['components'].keys()),
-            'Count': list(component_stats['components'].values())
-        }).sort_values('Count', ascending=False)
+        # Create DataFrames for analysis results
+        maintenance_types_df = pd.DataFrame([
+            {'Type': mtype, 'Count': count}
+            for mtype, count in component_stats['maintenance_types'].items()
+        ])
         
-        problems_df = pd.DataFrame({
-            'Problem': list(component_stats['problems'].keys()),
-            'Count': list(component_stats['problems'].values())
-        }).sort_values('Count', ascending=False)
-        
-        maintenance_types_df = pd.DataFrame({
-            'Type': list(component_stats['maintenance_types'].keys()),
-            'Count': list(component_stats['maintenance_types'].values())
-        }).sort_values('Count', ascending=False)
+        # Add percentage calculations
+        maintenance_types_df = add_percentage(maintenance_types_df)
+        maintenance_types_df = maintenance_types_df.sort_values('Count', ascending=False)
         
         # Save results
-        maintenance_df.to_csv(f'{output_dir}/component_analysis.csv', index=False)
-        problems_df.to_csv(f'{output_dir}/problem_analysis.csv', index=False)
-        maintenance_types_df.to_csv(f'{output_dir}/maintenance_types.csv', index=False)
+        maintenance_types_df.to_csv(f"{output_dir}/maintenance_types.csv", index=False)
         
-        # Print summary
+        # Print completion message
         print(f"\nAnalysis completed in {time.time() - start_time:.2f} seconds")
-        print("\nComponent Analysis:")
-        print(maintenance_df)
-        print("\nProblem Analysis:")
-        print(problems_df)
-        print("\nMaintenance Types:")
-        print(maintenance_types_df)
-        
-        print(f"\nAnalysis files saved to: {output_dir}")
+        print(f"Results saved to {output_dir}")
         
     except Exception as e:
-        logger.error("Error in main execution", exc_info=True)
-        sys.exit(1)
+        logger.error(f"Error in main execution: {str(e)}", exc_info=True)
+        raise
 
 if __name__ == "__main__":
     main()
