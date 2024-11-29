@@ -1,3 +1,23 @@
+# -*- coding: utf-8 -*-
+"""
+Ice Machine Maintenance Analysis Script
+This script analyzes maintenance records for ice machines using NLP techniques.
+It is designed to run in the coolsys_env environment.
+
+Required packages:
+- numpy==1.24.3
+- pyodbc==4.0.39
+- pandas==2.0.3
+- matplotlib==3.7.1
+- seaborn==0.12.2
+- torch>=2.0.0
+- transformers>=4.30.0
+- nltk>=3.8.1
+- tqdm>=4.65.0
+- pyspellchecker>=0.7.2
+- sqlalchemy==2.0.3
+"""
+
 #%% Imports and Setup
 ##################
 # Core Imports
@@ -70,43 +90,15 @@ import sqlalchemy as sa
 from sqlalchemy.engine import URL
 
 ##################
-# Utility Functions and Decorators
-##################
-
-def validate_dataframe(func):
-    """Decorator for DataFrame validation."""
-    def wrapper(*args, **kwargs):
-        df = func(*args, **kwargs)
-        if df is None or df.empty:
-            raise ValueError("Invalid DataFrame returned")
-        return df
-    return wrapper
-
-def setup_nltk(data_path: Optional[str] = None):
-    """Centralized NLTK setup function."""
-    resources = ['punkt', 'wordnet', 'averaged_perceptron_tagger', 'omw-1.4']
-    for resource in resources:
-        try:
-            nltk.data.find(f'{resource}')
-        except LookupError:
-            nltk.download(resource, quiet=True, download_dir=data_path)
-
-def create_distribution(data: List, category_name: str) -> pd.DataFrame:
-    """Generic function for creating distribution analysis."""
-    counts = Counter(data)
-    df = pd.DataFrame(list(counts.items()), columns=[category_name, 'Count'])
-    return add_percentage(df)
-
-##################
 # Configuration
 ##################
 
 # Define global font sizes for consistency across all charts
-LABEL_SIZE = 12       # Font size for axis labels and tick labels
-TITLE_SIZE = 14       # Title size
-PERCENT_SIZE = 10     # Font size for percentage labels
-PIE_FONT_SIZE = 10    # Font size for pie chart legends and labels
-HEATMAP_FONT_SIZE = 10  # Font size for heatmap labels and annotations
+LABEL_SIZE = 18       # Font size for axis labels and tick labels
+TITLE_SIZE = 28       # Title size
+PERCENT_SIZE = 16     # Font size for percentage labels
+PIE_FONT_SIZE = 12    # Font size for pie chart legends and labels
+HEATMAP_FONT_SIZE = 12  # Font size for heatmap labels and annotations
 
 # Visualization settings
 plt.style.use('seaborn-v0_8')
@@ -120,7 +112,22 @@ elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
     device = torch.device("mps")
 
 # Ensure NLTK data is available
-setup_nltk()
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download("punkt", quiet=True)
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download("wordnet", quiet=True)
+try:
+    nltk.data.find('taggers/averaged_perceptron_tagger')
+except LookupError:
+    nltk.download("averaged_perceptron_tagger", quiet=True)
+try:
+    nltk.data.find('corpora/omw-1.4')
+except LookupError:
+    nltk.download("omw-1.4", quiet=True)
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -224,32 +231,40 @@ def fetch_data_from_db() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         logger.error(error_msg, exc_info=True)
         return None, error_msg
 
-@validate_dataframe
-def load_data(use_cache: bool = True) -> pd.DataFrame:
-    """Unified function to load data with optional caching."""
+def fetch_and_validate_data():
+    """Fetch data from CSV cache or database and validate it."""
     try:
-        if use_cache and os.path.exists(CSV_FILE_PATH):
+        # Try loading from cache first
+        if os.path.exists(CSV_FILE_PATH):
             logger.info(f"Loading data from cache: {CSV_FILE_PATH}")
-            return pd.read_csv(CSV_FILE_PATH)
-        
+            df = pd.read_csv(CSV_FILE_PATH)
+            if not df.empty:
+                logger.info(f"Successfully loaded {len(df)} records from cache")
+                return df
+            logger.warning("Cache file exists but is empty")
+            
+        # Fetch from database if cache doesn't exist or is empty
         logger.info("Fetching data from database")
         df, error = fetch_data_from_db()
         
         if error:
-            raise RuntimeError(f"Database fetch error: {error}")
-        
+            logger.error(f"Database fetch error: {error}")
+            return None
+            
         if df is not None and not df.empty:
-            if use_cache:
-                save_to_csv(df, CSV_FILE_PATH)
-                logger.info(f"Saved {len(df)} records to cache")
+            # Save to cache
+            save_to_csv(df, CSV_FILE_PATH)
+            logger.info(f"Saved {len(df)} records to cache")
             return df
-        
-        raise ValueError("No data retrieved from database")
-        
+        else:
+            logger.error("No data retrieved from database")
+            return None
+            
     except Exception as e:
-        logger.error(f"Error in load_data: {str(e)}", exc_info=True)
-        raise
+        logger.error(f"Error in fetch_and_validate_data: {str(e)}", exc_info=True)
+        return None
 
+#%% Helper Functions
 def save_to_csv(df: pd.DataFrame, filepath: str) -> None:
     """Save DataFrame to CSV with error handling."""
     try:
@@ -263,11 +278,38 @@ def save_to_csv(df: pd.DataFrame, filepath: str) -> None:
         logger.error(f"Error saving to CSV: {str(e)}", exc_info=True)
         raise
 
+def load_data() -> pd.DataFrame:
+    """Main function to load data with caching mechanism."""
+    try:
+        # Try loading from cache first
+        if os.path.exists(CSV_FILE_PATH):
+            logger.info(f"Loading data from cache: {CSV_FILE_PATH}")
+            return pd.read_csv(CSV_FILE_PATH)
+        
+        # Fetch from database if cache doesn't exist
+        logger.info("Cache not found, fetching from database")
+        df, error = fetch_data_from_db()
+        
+        if error:
+            raise RuntimeError(error)
+        
+        if df is not None and not df.empty:
+            # Save to cache
+            save_to_csv(df, CSV_FILE_PATH)
+            return df
+        else:
+            raise ValueError("No data retrieved from database")
+            
+    except Exception as e:
+        logger.error(f"Error loading data: {str(e)}", exc_info=True)
+        raise
+
 def check_environment() -> None:
     """Check and log the execution environment."""
     logger.info(f"Python version: {sys.version}")
     logger.info(f"PyTorch version: {torch.__version__}")
     logger.info(f"Transformers version: {transformers.__version__}")
+    logger.info(f"Using device: {device}")
 
 def analyze_root_cause(verb, obj, text):
     """Analyze the root cause of an issue based on the maintenance action and context."""
@@ -524,17 +566,48 @@ def process_parts_consumables(df):
         parts.extend(found_parts)
     return parts
 
-def create_maintenance_type_distribution(types: List[str]) -> pd.DataFrame:
+def create_maintenance_type_distribution(types):
     """Create distribution analysis of maintenance types."""
-    return create_distribution(types, 'Maintenance Type')
+    # Ensure we have at least one type
+    if not types:
+        return pd.DataFrame({
+            'Category': ['UNSPECIFIED'],
+            'Count': [0]
+        })
+    
+    type_counts = Counter(types)
+    df = pd.DataFrame({
+        'Category': list(type_counts.keys()),
+        'Count': list(type_counts.values())
+    })
+    print("Maintenance Types DataFrame:")
+    print(df)
+    return df
 
-def create_problem_type_distribution(types: List[str]) -> pd.DataFrame:
+def create_problem_type_distribution(types):
     """Create distribution analysis of problem types."""
-    return create_distribution(types, 'Problem Type')
+    if not types:
+        return pd.DataFrame({
+            'Category': ['UNSPECIFIED'],
+            'Count': [0]
+        })
+    
+    type_counts = Counter(types)
+    df = pd.DataFrame({
+        'Category': list(type_counts.keys()),
+        'Count': list(type_counts.values())
+    })
+    print("Problem Types DataFrame:")
+    print(df)
+    return df
 
-def create_parts_consumables_distribution(parts: List[str]) -> pd.DataFrame:
+def create_parts_consumables_distribution(parts):
     """Create distribution analysis of parts and consumables."""
-    return create_distribution(parts, 'Part/Consumable')
+    part_counts = Counter(parts)
+    return pd.DataFrame({
+        'Category': list(part_counts.keys()),
+        'Count': list(part_counts.values())
+    })
 
 def add_percentage(df):
     """Add percentage column to distribution DataFrame."""
@@ -639,124 +712,76 @@ def calculate_correlations(maintenance_types_list, df):
 
 def save_results(maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df, correlation_df):
     """Save analysis results to CSV files."""
-    maintenance_type_df.to_csv('maintenance_types_analysis.csv', index=False)
-    problem_type_df.to_csv('problem_types_analysis.csv', index=False)
-    parts_consumables_df.to_csv('parts_consumables_analysis.csv', index=False)
-    parts_df.to_csv('parts_analysis.csv', index=False)
-    consumables_df.to_csv('consumables_analysis.csv', index=False)
-    correlation_df.to_csv('maintenance_correlations.csv', index=False)
+    logger.info("Saving analysis results to CSV files...")
+    
+    with tqdm(total=6, desc="Saving results") as pbar:
+        maintenance_type_df.to_csv('maintenance_types_analysis.csv', index=False)
+        pbar.update(1)
+        
+        problem_type_df.to_csv('problem_types_analysis.csv', index=False)
+        pbar.update(1)
+        
+        parts_consumables_df.to_csv('parts_consumables_analysis.csv', index=False)
+        pbar.update(1)
+        
+        parts_df.to_csv('parts_analysis.csv', index=False)
+        pbar.update(1)
+        
+        consumables_df.to_csv('consumables_analysis.csv', index=False)
+        pbar.update(1)
+        
+        correlation_df.to_csv('maintenance_correlations.csv', index=False)
+        pbar.update(1)
+    
+    logger.info("Results saved successfully")
 
 def create_visualizations(maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df, correlation_df):
     """Create and save all visualizations."""
-    logger.info("Creating visualizations...")
-    
-    # Set the default figure size and DPI
-    plt.rcParams['figure.dpi'] = 100
-    plt.rcParams['savefig.dpi'] = 100
-    
-    print("\nDataFrames at visualization time:")
-    print("\nMaintenance Types:")
-    print(maintenance_type_df)
-    print("\nProblem Types:")
-    print(problem_type_df)
-    
-    # Plot 1: Correlation Heatmap
-    plt.figure(figsize=(8, 6))
-    correlation_df_filtered = correlation_df[
-        ~correlation_df['Type1'].isin(['OTHER']) & 
-        ~correlation_df['Type2'].isin(['OTHER'])
-    ]
-    pivot_corr = correlation_df_filtered.pivot(index='Type1', columns='Type2', values='Correlation')
-    sns.heatmap(pivot_corr, annot=True, cmap='coolwarm', center=0, vmin=-1, vmax=1,
-               annot_kws={'size': HEATMAP_FONT_SIZE})
-    plt.title('Maintenance Type Correlations', fontsize=HEATMAP_FONT_SIZE + 4, fontweight='bold', pad=20)
-    plt.xlabel('')  # Remove x-axis label
-    plt.ylabel('')  # Remove y-axis label
-    plt.xticks(rotation=45, ha='right', fontsize=HEATMAP_FONT_SIZE)
-    plt.yticks(rotation=0, fontsize=HEATMAP_FONT_SIZE)
-    plt.tight_layout()
-    plt.show()
-    
-    # Plot 2: Maintenance Types Distribution (Pie Chart)
-    plt.figure(figsize=(8, 6))
-    total = maintenance_type_df['Count'].sum()
-    sizes = maintenance_type_df['Count'].values
-    
-    # Convert type numbers to words
-    type_mapping = {
-        'PREVENTIVE': 'Preventive',
-        'CORRECTIVE': 'Corrective',
-        'EMERGENCY': 'Emergency',
-        'UPGRADE': 'Upgrade',
-        'DIAGNOSTIC': 'Diagnostic',
-        'OTHER': 'Other',
-        'UNSPECIFIED': 'Unspecified'
-    }
-    
-    labels = [type_mapping.get(cat, cat) for cat in maintenance_type_df['Maintenance Type']]
-    
-    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-    plt.title('Maintenance Types Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-    plt.axis('equal')
-    plt.tight_layout()
-    plt.show()
-    
-    # Plot 3: Problem Types Distribution (Pie Chart)
-    plt.figure(figsize=(8, 6))
-    total = problem_type_df['Count'].sum()
-    sizes = problem_type_df['Count'].values
-    
-    problem_type_mapping = {
-        'MECHANICAL': 'Mechanical',
-        'ELECTRICAL': 'Electrical',
-        'COOLING': 'Cooling',
-        'WATER_SYSTEM': 'Water System',
-        'ICE_QUALITY': 'Ice Quality',
-        'NOISE': 'Noise',
-        'CONTROL': 'Control',
-        'OTHER': 'Other',
-        'UNSPECIFIED': 'Unspecified'
-    }
-    
-    labels = [problem_type_mapping.get(cat, cat) for cat in problem_type_df['Problem Type']]
-    
-    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-    plt.title('Problem Types Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-    plt.axis('equal')
-    plt.tight_layout()
-    plt.show()
-    
-    # Plot 4: Parts/Consumables Distribution (Pie Chart)
-    plt.figure(figsize=(8, 6))
-    total = parts_consumables_df['Count'].sum()
-    sizes = parts_consumables_df['Count'].values
-    labels = [cat for cat in parts_consumables_df['Part/Consumable']]
-    
-    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-    plt.title('Parts/Consumables Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-    plt.axis('equal')
-    plt.tight_layout()
-    plt.show()
-    
-    # Plot 5: Top Parts Distribution (Bar Chart)
-    plt.figure(figsize=(12, 6))
-    sns.barplot(data=parts_df.head(10), x='Count', y='Part')
-    plt.title('Top 10 Parts Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-    plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-    plt.ylabel('Part', fontsize=LABEL_SIZE, fontweight='bold')
-    plt.tight_layout()
-    plt.show()
-    
-    # Plot 6: Top Consumables Distribution (Bar Chart)
-    plt.figure(figsize=(12, 6))
-    sns.barplot(data=consumables_df.head(10), x='Count', y='Consumable')
-    plt.title('Top 10 Consumables Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-    plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-    plt.ylabel('Consumable', fontsize=LABEL_SIZE, fontweight='bold')
-    plt.tight_layout()
-    plt.show()
-    
-    logger.info("Visualizations completed successfully")
+    try:
+        # Set style parameters
+        plt.style.use('seaborn')
+        
+        # Create Parts Distribution
+        plt.figure(figsize=(15, 10))  # Increased figure size
+        sns.barplot(data=parts_df.head(20), x='Count', y='Category')
+        plt.title('Root Causes of Failure - Parts', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
+        plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.xticks(fontsize=LABEL_SIZE)
+        plt.yticks(fontsize=LABEL_SIZE)
+        
+        total = parts_df['Count'].sum()
+        for i, v in enumerate(parts_df.head(20)['Count']):
+            percentage = (v / total) * 100
+            plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
+        
+        plt.tight_layout()
+        plt.savefig('parts_distribution.png', bbox_inches='tight', dpi=300)
+        plt.close()
+        
+        # Create Consumables Distribution
+        plt.figure(figsize=(12, 10))
+        sns.barplot(data=consumables_df.head(20), x='Count', y='Category')
+        plt.title('Root Causes of Failure - Consumables', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
+        plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.xticks(fontsize=LABEL_SIZE)
+        plt.yticks(fontsize=LABEL_SIZE)
+        
+        total = consumables_df['Count'].sum()
+        for i, v in enumerate(consumables_df.head(20)['Count']):
+            percentage = (v / total) * 100
+            plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
+        
+        plt.tight_layout()
+        plt.savefig('consumables_distribution.png', bbox_inches='tight', dpi=300)
+        plt.close()
+        
+        logger.info("Visualizations completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error creating visualizations: {str(e)}", exc_info=True)
+        raise
 
 def display_visualizations(maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df, correlation_df):
     """Display all visualizations."""
@@ -765,11 +790,7 @@ def display_visualizations(maintenance_type_df, problem_type_df, parts_consumabl
     try:
         # Display Correlation Heatmap
         plt.figure(figsize=(10, 8))
-        correlation_df_filtered = correlation_df[
-            ~correlation_df['Type1'].isin(['OTHER']) & 
-            ~correlation_df['Type2'].isin(['OTHER'])
-        ]
-        pivot_corr = correlation_df_filtered.pivot(index='Type1', columns='Type2', values='Correlation')
+        pivot_corr = correlation_df.pivot(index='Type1', columns='Type2', values='Correlation')
         sns.heatmap(pivot_corr, annot=True, cmap='coolwarm', center=0, vmin=-1, vmax=1)
         plt.title('Maintenance Type Correlations', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
         plt.xlabel('')  # Remove x-axis label
@@ -796,8 +817,8 @@ def display_visualizations(maintenance_type_df, problem_type_df, parts_consumabl
             'UNSPECIFIED': 'Unspecified'
         }
         
-        # Use Maintenance Type column for labels and apply mapping
-        labels = [type_mapping.get(cat, cat) for cat in maintenance_type_df['Maintenance Type']]
+        # Use Category column for labels and apply mapping
+        labels = [type_mapping.get(cat, cat) for cat in maintenance_type_df['Category']]
         
         wedges, texts, autotexts = plt.pie(sizes, 
                                          labels=None,
@@ -837,8 +858,8 @@ def display_visualizations(maintenance_type_df, problem_type_df, parts_consumabl
             'UNSPECIFIED': 'Unspecified'
         }
         
-        # Use Problem Type column for labels and apply mapping
-        labels = [problem_type_mapping.get(cat, cat) for cat in problem_type_df['Problem Type']]
+        # Use Category column for labels and apply mapping
+        labels = [problem_type_mapping.get(cat, cat) for cat in problem_type_df['Category']]
         
         wedges, texts, autotexts = plt.pie(sizes, 
                                          labels=None,
@@ -862,10 +883,10 @@ def display_visualizations(maintenance_type_df, problem_type_df, parts_consumabl
         
         # Display Parts and Consumables Distribution
         plt.figure(figsize=(12, 8))
-        sns.barplot(data=parts_consumables_df.head(20), x='Count', y='Part/Consumable')
+        sns.barplot(data=parts_consumables_df.head(20), x='Count', y='Category')
         plt.title('Top 20 Most Common Parts/Consumables', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
         plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-        plt.ylabel('Part/Consumable', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
         plt.xticks(fontsize=LABEL_SIZE)
         plt.yticks(fontsize=LABEL_SIZE)
         total = parts_consumables_df['Count'].sum()
@@ -878,10 +899,10 @@ def display_visualizations(maintenance_type_df, problem_type_df, parts_consumabl
         
         # Display Parts Distribution
         plt.figure(figsize=(12, 8))
-        sns.barplot(data=parts_df.head(20), x='Count', y='Part')
+        sns.barplot(data=parts_df.head(20), x='Count', y='Category')
         plt.title('Root Causes of Failure - Parts', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
         plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-        plt.ylabel('Part', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
         plt.xticks(fontsize=LABEL_SIZE)
         plt.yticks(fontsize=LABEL_SIZE)
         total = parts_df['Count'].sum()
@@ -894,10 +915,10 @@ def display_visualizations(maintenance_type_df, problem_type_df, parts_consumabl
         
         # Display Consumables Distribution
         plt.figure(figsize=(12, 8))
-        sns.barplot(data=consumables_df.head(20), x='Count', y='Consumable')
+        sns.barplot(data=consumables_df.head(20), x='Count', y='Category')
         plt.title('Root Causes of Failure - Consumables', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
         plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-        plt.ylabel('Consumable', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
         plt.xticks(fontsize=LABEL_SIZE)
         plt.yticks(fontsize=LABEL_SIZE)
         total = consumables_df['Count'].sum()
@@ -959,34 +980,20 @@ def process_maintenance_data(df):
     """Process maintenance types and parts data."""
     maintenance_types_list = process_maintenance_types(df)
     problem_types_list = process_problem_types(df)
-    parts_data = process_parts_data(df)
+    parts_consumables, parts, consumables = process_parts_data(df)
     
-    return maintenance_types_list, problem_types_list, parts_data
+    return maintenance_types_list, problem_types_list, parts_consumables, parts, consumables
 
 def create_analysis_dataframes(maintenance_types_list, problem_types_list, parts_data):
     """Create analysis DataFrames for maintenance types and parts."""
-    # Create distribution DataFrames with consistent column names
     maintenance_type_df = create_maintenance_type_distribution(maintenance_types_list)
     problem_type_df = create_problem_type_distribution(problem_types_list)
     
-    # Unpack parts data
     parts_consumables, parts, consumables = parts_data
+    parts_consumables_df = pd.DataFrame(list(parts_consumables.items()), columns=['Category', 'Count'])
+    parts_df = pd.DataFrame(list(parts.items()), columns=['Category', 'Count'])
+    consumables_df = pd.DataFrame(list(consumables.items()), columns=['Category', 'Count'])
     
-    # Create DataFrames with consistent column names
-    parts_consumables_df = create_parts_consumables_distribution(list(parts_consumables.keys()))
-    parts_consumables_df['Count'] = list(parts_consumables.values())
-    
-    parts_df = pd.DataFrame({
-        'Part': list(parts.keys()),
-        'Count': list(parts.values())
-    })
-    
-    consumables_df = pd.DataFrame({
-        'Consumable': list(consumables.keys()),
-        'Count': list(consumables.values())
-    })
-    
-    # Add percentage to all DataFrames
     maintenance_type_df = add_percentage(maintenance_type_df)
     problem_type_df = add_percentage(problem_type_df)
     parts_consumables_df = add_percentage(parts_consumables_df)
@@ -1021,8 +1028,8 @@ def create_visualizations(maintenance_type_df, problem_type_df, parts_consumable
     # Plot 1: Correlation Heatmap
     plt.figure(figsize=(8, 6))
     correlation_df_filtered = correlation_df[
-        ~correlation_df['Type1'].isin(['OTHER']) & 
-        ~correlation_df['Type2'].isin(['OTHER'])
+        ~correlation_df['Type1'].isin(['Other']) & 
+        ~correlation_df['Type2'].isin(['Other'])
     ]
     pivot_corr = correlation_df_filtered.pivot(index='Type1', columns='Type2', values='Correlation')
     sns.heatmap(pivot_corr, annot=True, cmap='coolwarm', center=0, vmin=-1, vmax=1,
@@ -1051,19 +1058,35 @@ def create_visualizations(maintenance_type_df, problem_type_df, parts_consumable
         'UNSPECIFIED': 'Unspecified'
     }
     
-    labels = [type_mapping.get(cat, cat) for cat in maintenance_type_df['Maintenance Type']]
+    # Use Category column for labels and apply mapping
+    labels = [type_mapping.get(cat, cat) for cat in maintenance_type_df['Category']]
     
-    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+    wedges, texts, autotexts = plt.pie(sizes, 
+                                     labels=None,
+                                     autopct='%1.1f%%',
+                                     pctdistance=0.85,
+                                     textprops={'fontsize': PIE_FONT_SIZE})
     plt.title('Maintenance Types Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
+    
+    # Add count to legend labels
+    legend_labels = [f'{label} ({count:,})' for label, count in zip(labels, sizes)]
+    plt.legend(wedges, legend_labels,
+              title="Types",
+              title_fontsize=PIE_FONT_SIZE,
+              fontsize=PIE_FONT_SIZE,
+              loc="center left",
+              bbox_to_anchor=(1, 0, 0.5, 1))
     plt.axis('equal')
     plt.tight_layout()
     plt.show()
+    plt.close()
     
     # Plot 3: Problem Types Distribution (Pie Chart)
     plt.figure(figsize=(8, 6))
     total = problem_type_df['Count'].sum()
     sizes = problem_type_df['Count'].values
     
+    # Convert problem type numbers to words
     problem_type_mapping = {
         'MECHANICAL': 'Mechanical',
         'ELECTRICAL': 'Electrical',
@@ -1076,249 +1099,214 @@ def create_visualizations(maintenance_type_df, problem_type_df, parts_consumable
         'UNSPECIFIED': 'Unspecified'
     }
     
-    labels = [problem_type_mapping.get(cat, cat) for cat in problem_type_df['Problem Type']]
+    # Use Category column for labels and apply mapping
+    labels = [problem_type_mapping.get(cat, cat) for cat in problem_type_df['Category']]
     
-    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+    wedges, texts, autotexts = plt.pie(sizes, 
+                                     labels=None,
+                                     autopct='%1.1f%%',
+                                     pctdistance=0.85,
+                                     textprops={'fontsize': PIE_FONT_SIZE})
     plt.title('Problem Types Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
+    
+    # Add count to legend labels
+    legend_labels = [f'{label} ({count:,})' for label, count in zip(labels, sizes)]
+    plt.legend(wedges, legend_labels,
+              title="Types",
+              title_fontsize=PIE_FONT_SIZE,
+              fontsize=PIE_FONT_SIZE,
+              loc="center left",
+              bbox_to_anchor=(1, 0, 0.5, 1))
     plt.axis('equal')
     plt.tight_layout()
     plt.show()
+    plt.close()
     
-    # Plot 4: Parts/Consumables Distribution (Pie Chart)
-    plt.figure(figsize=(8, 6))
+    # Plot 4: Parts and Consumables Distribution (Bar Chart)
+    plt.figure(figsize=(12, 8))
+    sns.barplot(data=parts_consumables_df.head(20), x='Count', y='Category')
+    plt.title('Top 20 Most Common Parts/Consumables', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
+    plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
+    plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
+    plt.xticks(fontsize=LABEL_SIZE)
+    plt.yticks(fontsize=LABEL_SIZE)
     total = parts_consumables_df['Count'].sum()
-    sizes = parts_consumables_df['Count'].values
-    labels = [cat for cat in parts_consumables_df['Part/Consumable']]
-    
-    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-    plt.title('Parts/Consumables Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-    plt.axis('equal')
+    for i, v in enumerate(parts_consumables_df.head(20)['Count']):
+        percentage = (v / total) * 100
+        plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
     plt.tight_layout()
     plt.show()
+    plt.close()
     
-    # Plot 5: Top Parts Distribution (Bar Chart)
-    plt.figure(figsize=(12, 6))
-    sns.barplot(data=parts_df.head(10), x='Count', y='Part')
-    plt.title('Top 10 Parts Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
+    # Plot 5: Parts Distribution (Bar Chart)
+    plt.figure(figsize=(12, 8))
+    sns.barplot(data=parts_df.head(20), x='Count', y='Category')
+    plt.title('Root Causes of Failure - Parts', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
     plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-    plt.ylabel('Part', fontsize=LABEL_SIZE, fontweight='bold')
+    plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
+    plt.xticks(fontsize=LABEL_SIZE)
+    plt.yticks(fontsize=LABEL_SIZE)
+    total = parts_df['Count'].sum()
+    for i, v in enumerate(parts_df.head(20)['Count']):
+        percentage = (v / total) * 100
+        plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
     plt.tight_layout()
     plt.show()
+    plt.close()
     
-    # Plot 6: Top Consumables Distribution (Bar Chart)
-    plt.figure(figsize=(12, 6))
-    sns.barplot(data=consumables_df.head(10), x='Count', y='Consumable')
-    plt.title('Top 10 Consumables Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
+    # Plot 6: Consumables Distribution (Bar Chart)
+    plt.figure(figsize=(12, 8))
+    sns.barplot(data=consumables_df.head(20), x='Count', y='Category')
+    plt.title('Root Causes of Failure - Consumables', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
     plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-    plt.ylabel('Consumable', fontsize=LABEL_SIZE, fontweight='bold')
+    plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
+    plt.xticks(fontsize=LABEL_SIZE)
+    plt.yticks(fontsize=LABEL_SIZE)
+    total = consumables_df['Count'].sum()
+    for i, v in enumerate(consumables_df.head(20)['Count']):
+        percentage = (v / total) * 100
+        plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
     plt.tight_layout()
     plt.show()
+    plt.close()
     
     logger.info("Visualizations completed successfully")
-
-def display_visualizations(maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df, correlation_df):
-    """Display all visualizations."""
-    logger.info("Displaying visualizations...")
     
+#%% Entry Point
+# """Main execution function."""
+start_time = time.time()
+logger.info("Starting maintenance analysis...")
+
+#%%        
+# Step 1: Check environment
+logger.info("Step 1: Checking environment...")
+check_and_log_environment()
+        
+#%%
+# Step 2: Fetch and validate data
+logger.info("Step 2: Fetching data...")
+df = fetch_and_validate_data()
+if df is None:
+    logger.error("Failed to fetch data. Exiting...")
+    raise SystemExit("Data fetch failed")
+
+#%%       
+# Step 3: Process maintenance data
+logger.info("Step 3: Processing maintenance data...")
+maintenance_types_list, problem_types_list, parts_consumables, parts, consumables = process_maintenance_data(df)
+        
+#%%
+# Step 4: Create analysis DataFrames
+logger.info("Step 4: Creating analysis DataFrames...")
+maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df = create_analysis_dataframes(
+    maintenance_types_list, problem_types_list, (parts_consumables, parts, consumables)
+)
+
+#%%        
+# Step 5: Calculate correlations
+logger.info("Step 5: Calculating correlations...")
+correlation_df = calculate_correlations(maintenance_types_list, df)
+
+#%%        
+# Step 6: Save results
+logger.info("Step 6: Saving results...")
+save_results(maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df, correlation_df)
+
+#%%        
+# Step 7: Create visualizations
+logger.info("Step 7: Creating visualizations...")
+create_visualizations(maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df, correlation_df)
+        
+# Log completion and processing time
+processing_time = time.time() - start_time
+logger.info(f"Analysis completed successfully in {processing_time:.2f} seconds")
+print(f"Total processing time: {processing_time:.2f} seconds")
+# #%%
+# def print_oil_examples(df):
+#     """Print examples of maintenance records containing oil-related terms."""
+#     print("\nExamples of maintenance records containing oil-related terms:")
+#     print("-" * 80)
+    
+#     # Define specific oil-related terms to search for
+#     oil_terms = [
+#         r'(?<!c)\boil\b(?!er)',     # matches "oil" but not in "coil" or "boiler"
+#         r'(?<!c)\boils\b',          # matches "oils" but not "coils"
+#         r'\blubrican[t]?\b',        # matches "lubricant" or "lubricate"
+#         r'\bgrease[d]?\b',          # matches "grease" or "greased"
+#         r'\bcompressor oil\b',      # specific to compressor oil
+#         r'\bmineral oil\b',         # specific to mineral oil
+#         r'\boil level\b',           # specific to oil level checks
+#         r'\boil change\b',          # specific to oil changes
+#         r'\boil leak\b'             # specific to oil leaks
+#     ]
+    
+#     text_columns = ['wrkordr_wrk_rqstd', 'wrkordr_wrk_prfrmd', 'wrkordreqpmnt_wrk_rqstd', 'wrkordreqpmnt_wrk_prfrmd']
+    
+#     for column in text_columns:
+#         if column in df.columns:
+#             # Combine all oil terms with OR operator
+#             pattern = '|'.join(oil_terms)
+#             mask = df[column].str.contains(pattern, case=False, na=False, regex=True)
+#             examples = df[mask][column].head(5)  # showing 5 examples now for better coverage
+#             if not examples.empty:
+#                 print(f"\nFrom {column}:")
+#                 for idx, text in enumerate(examples, 1):
+#                     print(f"{idx}. {text}")
+#                 print()
+# #%%
+# print_oil_examples(df)
+#%%
+LABEL_SIZE = 18       # Font size for axis labels and tick labels
+TITLE_SIZE = 28       # Title size
+PERCENT_SIZE = 16     # Font size for percentage labels
+PIE_FONT_SIZE = 12    # Font size for pie chart legends and labels
+HEATMAP_FONT_SIZE = 12  # Font size for heatmap labels and annotations
+
+def create_visualizations(maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df, correlation_df):
+    """Create and save all visualizations."""
     try:
-        # Display Correlation Heatmap
-        plt.figure(figsize=(10, 8))
-        correlation_df_filtered = correlation_df[
-            ~correlation_df['Type1'].isin(['OTHER']) & 
-            ~correlation_df['Type2'].isin(['OTHER'])
-        ]
-        pivot_corr = correlation_df_filtered.pivot(index='Type1', columns='Type2', values='Correlation')
-        sns.heatmap(pivot_corr, annot=True, cmap='coolwarm', center=0, vmin=-1, vmax=1)
-        plt.title('Maintenance Type Correlations', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-        plt.xlabel('')  # Remove x-axis label
-        plt.ylabel('')  # Remove y-axis label
-        plt.xticks(rotation=45, ha='right', fontsize=LABEL_SIZE)
-        plt.yticks(rotation=0, fontsize=LABEL_SIZE)
-        plt.tight_layout()
-        plt.show()
-        plt.close()
+        # Set style parameters
+        plt.style.use('seaborn')
         
-        # Display Maintenance Types Distribution
-        plt.figure(figsize=(8, 6))
-        total = maintenance_type_df['Count'].sum()
-        sizes = maintenance_type_df['Count'].values
-        
-        # Convert type numbers to words
-        type_mapping = {
-            'PREVENTIVE': 'Preventive',
-            'CORRECTIVE': 'Corrective',
-            'EMERGENCY': 'Emergency',
-            'UPGRADE': 'Upgrade',
-            'DIAGNOSTIC': 'Diagnostic',
-            'OTHER': 'Other',
-            'UNSPECIFIED': 'Unspecified'
-        }
-        
-        # Use Maintenance Type column for labels and apply mapping
-        labels = [type_mapping.get(cat, cat) for cat in maintenance_type_df['Maintenance Type']]
-        
-        wedges, texts, autotexts = plt.pie(sizes, 
-                                         labels=None,
-                                         autopct='%1.1f%%',
-                                         pctdistance=0.85,
-                                         textprops={'fontsize': PIE_FONT_SIZE})
-        plt.title('Maintenance Types Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-        
-        # Add count to legend labels
-        legend_labels = [f'{label} ({count:,})' for label, count in zip(labels, sizes)]
-        plt.legend(wedges, legend_labels,
-                  title="Types",
-                  title_fontsize=PIE_FONT_SIZE,
-                  fontsize=PIE_FONT_SIZE,
-                  loc="center left",
-                  bbox_to_anchor=(1, 0, 0.5, 1))
-        plt.axis('equal')
-        plt.tight_layout()
-        plt.show()
-        plt.close()
-        
-        # Display Problem Types Distribution
-        plt.figure(figsize=(8, 6))
-        total = problem_type_df['Count'].sum()
-        sizes = problem_type_df['Count'].values
-        
-        # Convert problem type numbers to words
-        problem_type_mapping = {
-            'MECHANICAL': 'Mechanical',
-            'ELECTRICAL': 'Electrical',
-            'COOLING': 'Cooling',
-            'WATER_SYSTEM': 'Water System',
-            'ICE_QUALITY': 'Ice Quality',
-            'NOISE': 'Noise',
-            'CONTROL': 'Control',
-            'OTHER': 'Other',
-            'UNSPECIFIED': 'Unspecified'
-        }
-        
-        # Use Problem Type column for labels and apply mapping
-        labels = [problem_type_mapping.get(cat, cat) for cat in problem_type_df['Problem Type']]
-        
-        wedges, texts, autotexts = plt.pie(sizes, 
-                                         labels=None,
-                                         autopct='%1.1f%%',
-                                         pctdistance=0.85,
-                                         textprops={'fontsize': PIE_FONT_SIZE})
-        plt.title('Problem Types Distribution', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-        
-        # Add count to legend labels
-        legend_labels = [f'{label} ({count:,})' for label, count in zip(labels, sizes)]
-        plt.legend(wedges, legend_labels,
-                  title="Types",
-                  title_fontsize=PIE_FONT_SIZE,
-                  fontsize=PIE_FONT_SIZE,
-                  loc="center left",
-                  bbox_to_anchor=(1, 0, 0.5, 1))
-        plt.axis('equal')
-        plt.tight_layout()
-        plt.show()
-        plt.close()
-        
-        # Display Parts and Consumables Distribution
-        plt.figure(figsize=(12, 8))
-        sns.barplot(data=parts_consumables_df.head(20), x='Count', y='Part/Consumable')
-        plt.title('Top 20 Most Common Parts/Consumables', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
-        plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-        plt.ylabel('Part/Consumable', fontsize=LABEL_SIZE, fontweight='bold')
-        plt.xticks(fontsize=LABEL_SIZE)
-        plt.yticks(fontsize=LABEL_SIZE)
-        total = parts_consumables_df['Count'].sum()
-        for i, v in enumerate(parts_consumables_df.head(20)['Count']):
-            percentage = (v / total) * 100
-            plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
-        plt.tight_layout()
-        plt.show()
-        plt.close()
-        
-        # Display Parts Distribution
-        plt.figure(figsize=(12, 8))
-        sns.barplot(data=parts_df.head(20), x='Count', y='Part')
+        # Create Parts Distribution
+        plt.figure(figsize=(15, 10))  # Increased figure size
+        sns.barplot(data=parts_df.head(20), x='Count', y='Category')
         plt.title('Root Causes of Failure - Parts', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
         plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-        plt.ylabel('Part', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
         plt.xticks(fontsize=LABEL_SIZE)
         plt.yticks(fontsize=LABEL_SIZE)
+        
         total = parts_df['Count'].sum()
         for i, v in enumerate(parts_df.head(20)['Count']):
             percentage = (v / total) * 100
             plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
+        
         plt.tight_layout()
-        plt.show()
+        plt.savefig('parts_distribution.png', bbox_inches='tight', dpi=300)
         plt.close()
         
-        # Display Consumables Distribution
-        plt.figure(figsize=(12, 8))
-        sns.barplot(data=consumables_df.head(20), x='Count', y='Consumable')
+        # Create Consumables Distribution
+        plt.figure(figsize=(12, 10))
+        sns.barplot(data=consumables_df.head(20), x='Count', y='Category')
         plt.title('Root Causes of Failure - Consumables', fontsize=TITLE_SIZE, fontweight='bold', pad=20)
         plt.xlabel('Count', fontsize=LABEL_SIZE, fontweight='bold')
-        plt.ylabel('Consumable', fontsize=LABEL_SIZE, fontweight='bold')
+        plt.ylabel('Category', fontsize=LABEL_SIZE, fontweight='bold')
         plt.xticks(fontsize=LABEL_SIZE)
         plt.yticks(fontsize=LABEL_SIZE)
+        
         total = consumables_df['Count'].sum()
         for i, v in enumerate(consumables_df.head(20)['Count']):
             percentage = (v / total) * 100
             plt.text(v, i, f' {percentage:.1f}%', va='center', fontsize=PERCENT_SIZE)
+        
         plt.tight_layout()
-        plt.show()
+        plt.savefig('consumables_distribution.png', bbox_inches='tight', dpi=300)
         plt.close()
         
-        logger.info("Visualizations displayed successfully")
+        logger.info("Visualizations completed successfully")
         
     except Exception as e:
-        logger.error(f"Error displaying visualizations: {str(e)}")
-        plt.close('all')
+        logger.error(f"Error creating visualizations: {str(e)}", exc_info=True)
         raise
-
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    logger = logging.getLogger(__name__)
-    
-    try:
-        # Step 1: Check and log environment
-        check_and_log_environment()
-        
-        # Step 2: Load and validate data
-        df = fetch_and_validate_data()
-        
-        # Step 3: Process maintenance data
-        maintenance_types_list, problem_types_list, parts_data = process_maintenance_data(df)
-        
-        # Step 4: Create analysis DataFrames
-        maintenance_type_df, problem_type_df, parts_consumables_df, parts_df, consumables_df = create_analysis_dataframes(
-            maintenance_types_list, problem_types_list, parts_data
-        )
-        
-        # Step 5: Calculate correlations
-        correlation_df = calculate_correlations(maintenance_types_list, df)
-        
-        # Step 6: Save results to CSV files
-        save_results(
-            maintenance_type_df, problem_type_df, parts_consumables_df, 
-            parts_df, consumables_df, correlation_df
-        )
-        
-        # Step 7: Create and save visualizations
-        create_visualizations(
-            maintenance_type_df, problem_type_df, parts_consumables_df,
-            parts_df, consumables_df, correlation_df
-        )
-        
-        # Step 8: Display visualizations
-        display_visualizations(
-            maintenance_type_df, problem_type_df, parts_consumables_df,
-            parts_df, consumables_df, correlation_df
-        )
-        
-        logger.info("Analysis completed successfully")
-        
-    except Exception as e:
-        logger.error(f"Error during analysis: {str(e)}")
-        raise
+#%%
