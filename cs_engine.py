@@ -158,26 +158,81 @@ WHERE
 
 # Constants for maintenance types and problems
 MAINTENANCE_TYPES = {
-    'PREVENTIVE': ['inspect', 'check', 'clean', 'test', 'maintain'],
-    'CORRECTIVE': ['repair', 'replace', 'fix', 'adjust'],
-    'EMERGENCY': ['emergency', 'urgent', 'immediate', 'breakdown'],
-    'UPGRADE': ['upgrade', 'improve', 'enhance', 'modify'],
-    'DIAGNOSTIC': ['diagnose', 'troubleshoot', 'analyze', 'assess']
+    'PREVENTIVE': [
+        'inspect', 'check', 'clean', 'test', 'maintain',
+        'adjust', 'lubricate', 'tighten', 'calibrate',
+        'measure', 'scheduled', 'routine', 'preventative',
+        'monitor', 'service', 'tune', 'balance'
+    ],
+    'CORRECTIVE': [
+        'repair', 'replace', 'fix', 'adjust',
+        'rebuild', 'overhaul', 'restore', 'recondition',
+        'patch', 'modify', 'correct', 'resolve',
+        'troubleshoot', 'service'
+    ],
+    'EMERGENCY': [
+        'emergency', 'urgent', 'immediate', 'breakdown',
+        'failure', 'critical', 'malfunction', 'outage',
+        'shutdown', 'stop', 'crash', 'break'
+    ],
+    'UPGRADE': [
+        'upgrade', 'improve', 'enhance', 'modify',
+        'update', 'modernize', 'retrofit', 'revamp',
+        'optimize', 'augment', 'renovate'
+    ],
+    'DIAGNOSTIC': [
+        'diagnose', 'analyze', 'investigate', 'assess',
+        'evaluate', 'inspect', 'examine', 'check',
+        'test', 'monitor', 'measure', 'observe'
+    ]
 }
 
 PROBLEM_TYPES = {
-    'MECHANICAL': ['belt', 'motor', 'bearing', 'gear', 'pump', 'shaft', 'compressor'],
-    'ELECTRICAL': ['power', 'voltage', 'circuit', 'wire', 'electrical', 'sensor'],
-    'COOLING': ['refrigerant', 'temperature', 'cooling', 'freeze', 'cold', 'frost'],
-    'WATER_SYSTEM': ['water', 'leak', 'flow', 'drain', 'pipe', 'valve'],
-    'ICE_QUALITY': ['ice', 'cube', 'size', 'shape', 'quality', 'production'],
-    'NOISE': ['noise', 'vibration', 'loud', 'sound', 'rattling'],
-    'CONTROL': ['control', 'setting', 'program', 'display', 'interface']
+    'MECHANICAL': [
+        'belt', 'motor', 'bearing', 'gear', 'pump', 'shaft', 'compressor',
+        'pulley', 'coupling', 'alignment', 'wear', 'tension', 'loose',
+        'seized', 'broken', 'misaligned', 'overheating'
+    ],
+    'ELECTRICAL': [
+        'power', 'voltage', 'circuit', 'wire', 'electrical', 'sensor',
+        'overload', 'short', 'tripped', 'fuse', 'breaker', 'connection',
+        'grounding', 'capacitor', 'contactor', 'relay', 'transformer',
+        'control board'
+    ],
+    'COOLING': [
+        'refrigerant', 'temperature', 'cooling', 'freeze', 'cold', 'frost',
+        'superheat', 'subcooling', 'pressure', 'charge', 'leak', 'ice buildup',
+        'defrost', 'heat transfer', 'condenser', 'evaporator', 'TXV',
+        'head pressure', 'suction pressure', 'thermostat'
+    ],
+    'WATER_SYSTEM': [
+        'water', 'leak', 'flow', 'drain', 'pipe', 'valve',
+        'pressure', 'blockage', 'clog', 'scale', 'mineral', 'buildup',
+        'overflow', 'backup', 'pump', 'filter', 'connection', 'fitting',
+        'water level', 'water quality'
+    ],
+    'ICE_QUALITY': [
+        'ice', 'cube', 'size', 'shape', 'quality', 'production',
+        'cloudy', 'clear', 'hollow', 'incomplete', 'bridging',
+        'harvest', 'cycle time', 'capacity', 'rate', 'consistency',
+        'melting', 'sticking', 'clumping'
+    ],
+    'NOISE': [
+        'noise', 'vibration', 'loud', 'sound', 'rattling',
+        'squealing', 'grinding', 'humming', 'buzzing', 'knocking',
+        'clicking', 'banging', 'scraping', 'whistling'
+    ],
+    'CONTROL': [
+        'control', 'setting', 'program', 'display', 'interface',
+        'parameter', 'calibration', 'setpoint', 'configuration',
+        'programming', 'communication', 'error code', 'alarm',
+        'safety switch', 'high limit', 'low limit','display'
+    ]
 }
 
-PARTS_CONSUMABLES = {
-    'PARTS': ['motor', 'compressor', 'fan', 'pump', 'valve', 'filter', 'sensor', 'board', 'switch', 'thermostat'],
-    'CONSUMABLES': ['refrigerant', 'oil', 'water', 'cleaner', 'lubricant', 'chemical']
+parts_consumables = {
+    'PARTS': ['motor', 'compressor', 'fan', 'pump', 'valve', 'filter', 'sensor', 'board', 'switch', 'thermostat', 'belt','scroll compressor', 'reciprocating compressor', 'compressor body', 'compressor motor', 'crankshaft', 'piston', 'valve plate','condenser coil', 'condenser fan', 'condenser motor', 'heat exchanger', 'fins', 'condenser tube', 'evaporator coil', 'evaporator fan', 'evaporator motor', 'defrost heater', 'distribution tubes','expansion valve', 'TXV', 'solenoid valve', 'check valve', 'service valve', 'hot gas valve','filter drier', 'suction filter', 'strainer', 'accumulator'],
+    'CONSUMABLES': ['refrigerant', 'oil', 'cleaner', 'lubricant', 'chemical','sanitizer','degreaser']
 }
 
 #%% Database Functions
@@ -269,85 +324,54 @@ def check_environment() -> None:
     logger.info(f"PyTorch version: {torch.__version__}")
     logger.info(f"Transformers version: {transformers.__version__}")
 
+
+#%%
 def analyze_root_cause(verb, obj, text):
     """Analyze the root cause of an issue based on the maintenance action and context."""
-    # Define detailed component categories and their related terms
-    components = {
-        # Ice Making System
-        'freeze_plate_system': {
-            'evaporator plate', 'freeze plate', 'cooling surface', 'grid plate', 
-            'ice mold', 'cube form', 'ice formation', 'freezing surface',
-            'water distribution plate', 'cell size', 'bridge thickness'
+    # Initialize variables
+    root_cause = None
+    confidence = 0.0
+    
+    # Define root cause patterns
+    root_cause_patterns = {
+        'wear_and_tear': {
+            'worn', 'damaged', 'deteriorated', 'corroded',
+            'rusted', 'degraded', 'aged', 'fatigued'
         },
-        'ice_formation_control': {
-            'thickness sensor', 'ice thickness', 'bridge control',
-            'water level sensor', 'formation time', 'freeze cycle',
-            'water curtain', 'spray time', 'freeze timer'
+        'improper_operation': {
+            'misuse', 'overload', 'incorrect', 'improper',
+            'wrong', 'error', 'mistake', 'fault'
         },
-        'harvest_system': {
-            'harvest valve', 'hot gas valve', 'defrost valve', 
-            'harvest timer', 'harvest assist', 'release mechanism',
-            'hot gas bypass', 'harvest pressure', 'harvest solenoid',
-            'harvest check valve', 'harvest complete switch'
+        'environmental': {
+            'temperature', 'humidity', 'dust', 'dirt',
+            'debris', 'contamination', 'environment'
+        },
+        'quality_issues': {
+            'defective', 'faulty', 'poor quality', 'bad',
+            'substandard', 'inferior', 'flawed'
         }
     }
     
-    # Define parts and consumables categories
-    parts_consumables = {
-        'refrigeration_parts': {
-            'compressor': {'scroll compressor', 'reciprocating compressor', 'compressor body', 'compressor motor', 'crankshaft', 'piston', 'valve plate'},
-            'condenser': {'condenser coil', 'condenser fan', 'condenser motor', 'heat exchanger', 'fins', 'condenser tube'},
-            'evaporator': {'evaporator coil', 'evaporator fan', 'evaporator motor', 'defrost heater', 'distribution tubes'},
-            'valves': {'expansion valve', 'TXV', 'solenoid valve', 'check valve', 'service valve', 'hot gas valve'},
-            'filters': {'filter drier', 'suction filter', 'strainer', 'accumulator'}
-        }
-    }
+    # Process text to find root cause
+    text_lower = text.lower()
     
-    # Define maintenance types with detailed activities
-    maintenance_types = {
-        'preventive': {
-            'inspect', 'clean', 'adjust', 'lubricate', 'tighten',
-            'calibrate', 'test', 'check', 'measure', 'scheduled',
-            'routine', 'preventative'
-        },
-        'corrective': {
-            'repair', 'replace', 'fix', 'rebuild', 'overhaul',
-            'restore', 'rectify', 'correct', 'resolve', 'service'
-        },
-        'predictive': {
-            'monitor', 'analyze', 'trend', 'forecast', 'predict',
-            'assess', 'evaluate', 'diagnose', 'investigate', 'study'
-        },
-        'emergency': {
-            'breakdown', 'failure', 'emergency', 'urgent', 'critical',
-            'immediate', 'unplanned', 'unexpected', 'sudden', 'acute'
-        }
-    }
+    # Find maintenance type
+    maintenance_type = None
+    max_matches = 0
     
-    def find_matches(text, term_dict):
-        """Find matches in text for terms in term_dict."""
-        text_lower = text.lower()
-        matches = []
-        for category, terms in term_dict.items():
-            if any(term.lower() in text_lower for term in terms):
-                matches.append(category)
-        return matches
-    
-    # Combine all text fields for analysis
-    full_text = f"{text} {obj} {verb}".lower()
-    
-    # Find all matches
-    found_components = find_matches(full_text, components)
-    found_problems = find_matches(full_text, problem_indicators)
-    found_parts = find_parts_consumables(full_text)
+    for mtype, keywords in MAINTENANCE_TYPES.items():
+        matches = sum(1 for word in keywords if word.lower() in text_lower)
+        if matches > max_matches:
+            max_matches = matches
+            maintenance_type = mtype
     
     # Determine maintenance type
-    maintenance_type = determine_maintenance_type(full_text)
+    maintenance_type = determine_maintenance_type(text)
     
     return {
-        'components': found_components,
-        'problems': found_problems,
-        'parts': found_parts,
+        'components': [],
+        'problems': [],
+        'parts': [],
         'maintenance_type': maintenance_type
     }
 
